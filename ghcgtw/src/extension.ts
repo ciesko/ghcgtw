@@ -19,6 +19,18 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('github-copilot-gateway.showInfo', () => showInfo())
     );
 
+    // Auto-failover: try to start server when window gains focus
+    context.subscriptions.push(
+        vscode.window.onDidChangeWindowState(async (state) => {
+            if (state.focused && !server) {
+                const existingGateway = await checkExistingGateway();
+                if (!existingGateway) {
+                    startServer();
+                }
+            }
+        })
+    );
+
     // Auto-start server on activation
     startServer();
 }
