@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as http from 'http';
+import * as crypto from 'crypto';
 
 const PORT = 3000;
 const GATEWAY_ID = 'github-copilot-gateway';
@@ -7,8 +8,16 @@ let server: http.Server | undefined;
 let statusBarItem: vscode.StatusBarItem;
 let requestCount = 0;
 let startTime: number | undefined;
+let apiKey: string | undefined;
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
+    // Initialize or retrieve API key from encrypted storage
+    apiKey = await context.secrets.get('ghcgtw.apiKey');
+    if (!apiKey) {
+        apiKey = crypto.randomUUID();
+        await context.secrets.store('ghcgtw.apiKey', apiKey);
+    }
+
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.command = 'github-copilot-gateway.showInfo';
     context.subscriptions.push(statusBarItem);
@@ -16,7 +25,8 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('github-copilot-gateway.start', () => startServer()),
         vscode.commands.registerCommand('github-copilot-gateway.stop', () => stopServer()),
-        vscode.commands.registerCommand('github-copilot-gateway.showInfo', () => showInfo())
+        vscode.commands.registerCommand('github-copilot-gateway.showInfo', () => showInfo()),
+        vscode.commands.registerCommand('github-copilot-gateway.regenerateApiKey', () => regenerateApiKey(context))
     );
 
     // Auto-failover: try to start server when window gains focus
@@ -63,6 +73,25 @@ function startServer() {
     }
 
     server = http.createServer(async (req, res) => {
+        // Security: Validate API key (except /health endpoint)
+        if (req.url !== '/health') {
+            const auth = req.headers['authorization'];
+            if (!auth || auth !== `Bearer ${apiKey}`) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Unauthorized. Use Authorization: Bearer <API_KEY>' }));
+                return;
+            }
+        }
+
+        // Security: Block suspicious origins (browser-based attacks)
+        const origin = req.headers['origin'];
+        const referer = req.headers['referer'];
+        if (origin || referer) {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Forbidden. Browser requests not allowed for security.' }));
+            return;
+        }
+
         // Enable CORS
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -91,7 +120,7 @@ function startServer() {
         }
     });
 
-    server.listen(PORT, () => {
+    server.listen(PORT, '127.0.0.1', () => {
         startTime = Date.now();
         requestCount = 0;
         statusBarItem.text = `$(circle-filled) AI Gateway :${PORT} (hosting)`;
@@ -204,7 +233,27 @@ async function showInfo() {
         `**Endpoint:** http://localhost:${PORT}`
     ].join('\n');
 
-    vscode.window.showInformationMessage(info, { modal: true });
+    const choice = await vscode.window.showInformationMessage(info, { modal: true }, 'Copy API Key', 'Regenerate Key');
+    if (choice === 'Copy API Key') {
+        vscode.env.clipboard.writeText(apiKey!);
+        vscode.window.showInformationMessage('API key copied to clipboard');
+    } else if (choice === 'Regenerate Key') {
+        vscode.commands.executeCommand('github-copilot-gateway.regenerateApiKey');
+    }
+}
+
+async function regenerateApiKey(context: vscode.ExtensionContext) {
+    const choice = await vscode.window.showWarningMessage(
+        'Regenerate API key? All clients will need the new key.',
+        { modal: true },
+        'Regenerate'
+    );
+    if (choice === 'Regenerate') {
+        apiKey = crypto.randomUUID();
+        await context.secrets.store('ghcgtw.apiKey', apiKey);
+        vscode.env.clipboard.writeText(apiKey);
+        vscode.window.showInformationMessage('New API key generated and copied to clipboard');
+    }
 }
 
 function updateStatusBar() {

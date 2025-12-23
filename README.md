@@ -32,15 +32,34 @@ build.bat         # Windows
 ```
 
 **2. Open VS Code**  
-Extension auto-starts. Check status bar (bottom-right): `✓ AI Gateway :3000`
+Extension auto-starts. Check status bar (bottom-right): `✓ AI Gateway :3000 (hosting)`
 
-**3. Use It**
+**3. Get Your API Key**  
+Click the status bar → "Copy API Key" → Paste into your environment:
+```bash
+export GHCGTW_API_KEY='your-api-key-here'
+```
+
+**4. Use It**
 ```bash
 pip install -r requirements.txt
 python qchat.py "Explain async/await in Python"
 ```
 
 Done! Any app can now call `http://localhost:3000/v1/chat/completions`
+
+## Security
+
+- **Localhost-only**: Gateway only accepts connections from `127.0.0.1` (not accessible from network)
+- **API Key**: Every request (except `/health`) requires `Authorization: Bearer <API_KEY>` header
+- **Browser protection**: Blocks requests with `Origin` or `Referer` headers (CSRF prevention)
+- **Key storage**: API key auto-generated on first run, stored encrypted in OS keychain
+- **Key management**: 
+  - View: Click status bar → shows key in popup
+  - Copy: Click "Copy API Key" button
+  - Regenerate: Command palette → "GitHub Copilot Gateway: Regenerate API Key"
+
+> **Note:** The same API key is shared across all VS Code windows for the same user.
 
 ## API Endpoints
 
@@ -64,8 +83,12 @@ OpenAI SDK compatible—just point `base_url` to `http://localhost:3000/v1`
 **Python:**
 ```python
 import openai
+import os
 
-client = openai.OpenAI(base_url="http://localhost:3000/v1", api_key="any")
+client = openai.OpenAI(
+    base_url="http://localhost:3000/v1",
+    api_key=os.environ.get('GHCGTW_API_KEY')
+)
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "Hello!"}],
@@ -79,6 +102,7 @@ for chunk in response:
 ```bash
 curl http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GHCGTW_API_KEY" \
   -d '{"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "Hi!"}]}'
 ```
 
@@ -96,6 +120,7 @@ Uses official VS Code Language Model API (`vscode.lm`) as documented in [Microso
 
 | Issue | Fix |
 |-------|-----|
-| Connection refused | VS Code must be running. Check status bar: `✓ AI Gateway :3000` |
-| Port in use | Only one VS Code instance can run the gateway |
+| Connection refused | VS Code must be running. Check status bar: `✓ AI Gateway :3000 (hosting)` |
+| Unauthorized error | Set API key: `export GHCGTW_API_KEY='key'`. Get key from status bar popup. |
+| Port in use | Only one VS Code instance can host. Non-hosting windows show hollow circle `○`. |
 | No models | Sign in to GitHub Copilot extension |

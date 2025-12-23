@@ -8,6 +8,7 @@ import sys
 import argparse
 import json
 import warnings
+import os
 
 # Suppress urllib3 OpenSSL warnings
 warnings.filterwarnings('ignore', message='.*OpenSSL.*')
@@ -19,11 +20,25 @@ except ImportError:
     sys.exit(1)
 
 GATEWAY_URL = "http://localhost:3000"
+API_KEY = os.environ.get('GHCGTW_API_KEY', '')
+
+if not API_KEY:
+    print("Warning: GHCGTW_API_KEY environment variable not set.")
+    print("Get your API key from VS Code: Click the status bar '✓ AI Gateway :3000' → Copy API Key")
+    print("Then run: export GHCGTW_API_KEY='your-key-here'")
+    print()
+
+def get_headers():
+    """Get request headers with API key."""
+    headers = {"Content-Type": "application/json"}
+    if API_KEY:
+        headers["Authorization"] = f"Bearer {API_KEY}"
+    return headers
 
 def list_models():
     """List available AI models from the gateway."""
     try:
-        response = requests.get(f"{GATEWAY_URL}/v1/models")
+        response = requests.get(f"{GATEWAY_URL}/v1/models", headers=get_headers())
         response.raise_for_status()
         data = response.json()
         
@@ -58,7 +73,7 @@ def chat(prompt, model=None, stream=True):
                 f"{GATEWAY_URL}/v1/chat/completions",
                 json=payload,
                 stream=True,
-                headers={"Content-Type": "application/json"}
+                headers=get_headers()
             )
             response.raise_for_status()
             
@@ -88,7 +103,7 @@ def chat(prompt, model=None, stream=True):
             response = requests.post(
                 f"{GATEWAY_URL}/v1/chat/completions",
                 json=payload,
-                headers={"Content-Type": "application/json"}
+                headers=get_headers()
             )
             response.raise_for_status()
             
