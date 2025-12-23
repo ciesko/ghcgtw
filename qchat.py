@@ -77,8 +77,8 @@ def chat(prompt, model=None, stream=True):
             )
             response.raise_for_status()
             
-            print("Assistant: ", end="", flush=True)
             used_model = None
+            first_chunk = True
             for line in response.iter_lines():
                 if line:
                     line_str = line.decode('utf-8')
@@ -92,12 +92,13 @@ def chat(prompt, model=None, stream=True):
                                 used_model = chunk.get('model')
                             content = chunk['choices'][0]['delta'].get('content', '')
                             if content:
+                                if first_chunk and used_model:
+                                    print(f"Assistant [{used_model}]: ", end="", flush=True)
+                                    first_chunk = False
                                 print(content, end="", flush=True)
                         except json.JSONDecodeError:
                             pass
             print()  # New line at the end
-            if used_model and not model:
-                print(f"[using {used_model}]", file=sys.stderr)
         else:
             # Non-streaming response
             response = requests.post(
@@ -110,9 +111,8 @@ def chat(prompt, model=None, stream=True):
             data = response.json()
             message = data['choices'][0]['message']['content']
             used_model = data.get('model')
-            print(f"Assistant: {message}")
-            if used_model and not model:
-                print(f"[using {used_model}]", file=sys.stderr)
+            model_label = f" [{used_model}]" if used_model else ""
+            print(f"Assistant{model_label}: {message}")
         
         return True
         

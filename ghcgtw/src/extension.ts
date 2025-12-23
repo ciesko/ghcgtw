@@ -306,7 +306,7 @@ async function handleTokenCount(req: http.IncomingMessage, res: http.ServerRespo
                 selectedModel = familyModels[0];
             }
         } else {
-            const miniModels = await vscode.lm.selectChatModels({ family: 'gpt-4o-mini' });
+            const miniModels = await vscode.lm.selectChatModels({ family: 'gpt-5-mini' });
             selectedModel = miniModels.length > 0 ? miniModels[0] : (await requestModelAccess())[0];
         }
 
@@ -369,8 +369,8 @@ async function handleChatCompletion(req: http.IncomingMessage, res: http.ServerR
                 selectedModel = familyModels[0];
             }
         } else {
-            // Default: use gpt-4o-mini
-            const miniModels = await vscode.lm.selectChatModels({ family: 'gpt-4o-mini' });
+            // Default: use gpt-5-mini
+            const miniModels = await vscode.lm.selectChatModels({ family: 'gpt-5-mini' });
             if (miniModels.length > 0) {
                 selectedModel = miniModels[0];
             } else {
