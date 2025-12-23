@@ -251,8 +251,7 @@ async function regenerateApiKey(context: vscode.ExtensionContext) {
     if (choice === 'Regenerate') {
         apiKey = crypto.randomUUID();
         await context.secrets.store('ghcgtw.apiKey', apiKey);
-        vscode.env.clipboard.writeText(apiKey);
-        vscode.window.showInformationMessage('New API key generated and copied to clipboard');
+        vscode.window.showInformationMessage('New API key generated. Click status bar to copy.');
     }
 }
 
