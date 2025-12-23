@@ -1,0 +1,54 @@
+{
+  "name": "github-copilot-gateway",
+  "displayName": "GitHub Copilot AI Gateway",
+  "description": "Expose GitHub Copilot's AI API as a local HTTP server",
+  "version": "0.1.0",
+  "publisher": "ciesko",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ciesko/ghcgtw.git"
+  },
+  "keywords": [
+    "github-copilot",
+    "ai",
+    "llm",
+    "openai",
+    "api-gateway",
+    "proxy"
+  ],
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=18.0.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "github-copilot-gateway.start",
+        "title": "Start AI Gateway Server"
+      },
+      {
+        "command": "github-copilot-gateway.stop",
+        "title": "Stop AI Gateway Server"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.x",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}
