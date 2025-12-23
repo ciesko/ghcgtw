@@ -47,9 +47,15 @@ Done! Any app can now call `http://localhost:3000/v1/chat/completions`
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/v1/models` | GET | List available models |
-| `/v1/chat/completions` | POST | Chat (streaming, tools, images) |
-| `/v1/tokens` | POST | Count tokens |
+| `/v1/chat/completions` | POST | Chat with streaming, function/tool calling, vision (images) |
+| `/v1/tokens` | POST | Count tokens for messages |
 | `/health` | GET | Server status |
+
+**Supported Features:**
+- ✅ Streaming responses (SSE)
+- ✅ Function/tool calling
+- ✅ Vision (image input via base64 data URIs)
+- ✅ Multiple models (GPT-4o, Claude 3.5 Sonnet, o1, etc.)
 
 OpenAI SDK compatible—just point `base_url` to `http://localhost:3000/v1`
 
