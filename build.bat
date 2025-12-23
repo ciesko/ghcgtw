@@ -38,19 +38,41 @@ echo.
 
 set /p INSTALL="Install extension now? (y/n) "
 if /i "%INSTALL%"=="y" (
+    REM Try to find code command
+    where code >nul 2>&1
+    if %errorlevel% neq 0 (
+        REM Try common installation paths
+        if exist "%LOCALAPPDATA%\Programs\Microsoft VS Code\bin\code.cmd" (
+            set CODE_CMD="%LOCALAPPDATA%\Programs\Microsoft VS Code\bin\code.cmd"
+        ) else if exist "%ProgramFiles%\Microsoft VS Code\bin\code.cmd" (
+            set CODE_CMD="%ProgramFiles%\Microsoft VS Code\bin\code.cmd"
+        ) else (
+            echo Warning: 'code' command not found. To add it to PATH:
+            echo   1. Open VS Code
+            echo   2. Press Ctrl+Shift+P
+            echo   3. Run: Shell Command: Install 'code' command in PATH
+            echo.
+            echo Alternatively, install manually via VS Code:
+            echo   Extensions: Install from VSIX... -^> Select %VSIX_FILE%
+            goto :end
+        )
+    ) else (
+        set CODE_CMD=code
+    )
+    
     REM Extract extension ID from package.json using Node.js (same as build.sh)
     for /f "delims=" %%i in ('node -pe "const pkg = require('./ghcgtw/package.json'); `${pkg.publisher}.${pkg.name}`"') do set EXTENSION_ID=%%i
     
     REM Check if extension is installed
-    code --list-extensions | findstr /i "^%EXTENSION_ID%$" >nul
+    %CODE_CMD% --list-extensions | findstr /i "^%EXTENSION_ID%$" >nul
     if %errorlevel% equ 0 (
         echo Uninstalling previous version...
-        code --uninstall-extension "%EXTENSION_ID%"
+        %CODE_CMD% --uninstall-extension "%EXTENSION_ID%"
         timeout /t 1 /nobreak >nul
     )
     
     echo Installing extension...
-    code --install-extension "%VSIX_FILE%"
+    %CODE_CMD% --install-extension "%VSIX_FILE%"
     if %errorlevel% neq 0 (
         echo Error: Failed to install extension
         exit /b 1
@@ -62,3 +84,5 @@ if /i "%INSTALL%"=="y" (
     echo To install manually, use VS Code command palette:
     echo   Extensions: Install from VSIX... - Select %VSIX_FILE%
 )
+
+:end

@@ -82,8 +82,8 @@ function startServer() {
     server.listen(PORT, () => {
         startTime = Date.now();
         requestCount = 0;
-        statusBarItem.text = `$(check) AI Gateway :${PORT}`;
-        statusBarItem.tooltip = 'GitHub Copilot AI Gateway is running (click for details)';
+        statusBarItem.text = `$(circle-filled) AI Gateway :${PORT} (hosting)`;
+        statusBarItem.tooltip = 'This window is hosting the AI Gateway server (click for details)';
         statusBarItem.show();
         vscode.window.showInformationMessage(`AI Gateway started on http://localhost:${PORT}`);
     });
@@ -92,8 +92,8 @@ function startServer() {
         if (err.code === 'EADDRINUSE') {
             const isGateway = await checkExistingGateway();
             if (isGateway) {
-                statusBarItem.text = `$(check) AI Gateway :${PORT}`;
-                statusBarItem.tooltip = 'Connected to existing AI Gateway on this port';
+                statusBarItem.text = `$(circle-outline) AI Gateway :${PORT}`;
+                statusBarItem.tooltip = 'Gateway is hosted by another VS Code window';
                 statusBarItem.show();
             } else {
                 statusBarItem.text = `$(warning) AI Gateway (port ${PORT} in use)`;
@@ -157,10 +157,10 @@ async function showInfo() {
     if (!server) {
         const connected = await checkExistingGateway();
         if (connected) {
-            statusBarItem.text = `$(check) AI Gateway :${PORT}`;
-            statusBarItem.tooltip = 'Connected to existing AI Gateway on this port';
+            statusBarItem.text = `$(circle-outline) AI Gateway :${PORT}`;
+            statusBarItem.tooltip = 'Gateway is hosted by another VS Code window';
             statusBarItem.show();
-            vscode.window.showInformationMessage(`AI Gateway is already running on port ${PORT}. This window is connected to the existing instance.`);
+            vscode.window.showInformationMessage(`Gateway is hosted by another VS Code window.`);
             return;
         }
 
