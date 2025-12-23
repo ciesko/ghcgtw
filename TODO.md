@@ -1,6 +1,44 @@
 # GitHub Copilot Gateway - TODO
 
+## 🗺️ Roadmap (High-Level Milestones)
+
+```mermaid
+flowchart LR
+  M1[Milestone 1:<br/>Reliable Local Gateway]
+  M2[Milestone 2:<br/>Compatibility & Safety]
+  M3[Milestone 3:<br/>Shareable Integration]
+  M4[Milestone 4:<br/>Agentic Platform]
+  
+  M1 --> M2 --> M3 --> M4
+  
+  M1 -.-> D1[Config • Commands<br/>Status • Logging]
+  M2 -.-> D2[OpenAI API audit<br/>Security hardening]
+  M3 -.-> D3[VSIX/Marketplace<br/>MCP facade]
+  M4 -.-> D4[Sessions • RAG<br/>Audio/vision]
+```
+
+Each milestone maps to sections below; the checklist remains the source of truth.
+
+## ⚠️ Non-Goals / API Limitations (Important)
+- GitHub Copilot UI usage metrics ("chat messages", "premium stats", "agent sessions") are not exposed via the VS Code extension API today, so the gateway cannot re-expose them.
+- True post-request token usage is not available from `vscode.lm` responses today; only pre-request token counting via `model.countTokens(...)` is available.
+- A standalone gateway process (outside VS Code) cannot use `vscode.lm` directly; a standalone CLI would require a different provider/backend.
+
+## 🚧 Top Priority: Shareable Integration Artifact
+- [ ] Create a “prototype integration kit” with a deliberate dual-surface design: (1) keep the OpenAI-compatible REST API on `http://127.0.0.1:3000/v1` for drop-in client compatibility, and (2) add an MCP server facade (stdio or streamable HTTP) for AI hosts/agents—so they can discover available tools/resources (schemas + metadata) and invoke them in a standard way
+
+Immediate thoughts: for most teams the best artifact is an installable VSIX (or Marketplace install once published) plus a short “Quickstart for agents” section that documents the REST base URL and what is/ isn’t supported. Sharing only source code is usually too much friction for prototyping (build/install drift). For “Copilot agent / tool-native” integrations, MCP is the right complementary surface: it’s not just a separate “metadata endpoint”—the MCP protocol itself provides discovery (available tools, schemas, server info) and a standard invocation mechanism. To avoid drift between REST behavior, MCP tool schemas, and docs: make the gateway’s capabilities the single source of truth and generate/serve both surfaces dynamically from runtime introspection (e.g., tool list + JSON schemas from `vscode.lm.tools`, model list + capabilities from `vscode.lm.selectChatModels()`, and shared request/response types in one place).
+
 ## 🔥 Immediate Priority (High Value, Low Effort)
+
+### Expose VS Code's Tool Registry
+- [ ] Explore `vscode.lm.tools` to discover what built-in tools are registered
+- [ ] Add `/v1/tools` endpoint to list available tools (name, description, inputSchema)
+- [ ] Implement tool invocation via `vscode.lm.invokeTool(name, options, token)`
+- [ ] Map tool results to OpenAI-style tool response format
+- [ ] Test with Copilot's built-in tools (workspace search, file operations, etc.)
+- [ ] Document which tools are available and their capabilities
+- [ ] Add examples showing how to use registered tools from clients
 
 ### Real-World Validation Testing
 - [ ] Test gateway with Claude 3.5 Sonnet model (if available in Copilot subscription)
@@ -149,6 +187,98 @@
 
 ---
 
+## 🤖 Agentic Mode + Memory/RAG + Media (Next-Level)
+
+### Agent Runtime (Copilot “Agent Mode” Outside VS Code)
+- [ ] Define a minimal “agent loop” contract (plan → act/tool → observe → continue) that runs over existing `/v1/chat/completions`
+- [ ] Add server-side “session” concept to support multi-turn agent runs:
+  - [ ] Create/attach session id (header or request field)
+  - [ ] Persist message/tool history per session
+  - [ ] Add TTL + max history size to avoid unbounded growth
+- [ ] Add endpoints for agent operations (in addition to OpenAI-compatible endpoints):
+  - [ ] `POST /v1/agents/runs` (start an agent run)
+  - [ ] `GET /v1/agents/runs/{id}` (poll status)
+  - [ ] `GET /v1/agents/runs/{id}/events` (stream events)
+  - [ ] `POST /v1/agents/runs/{id}/cancel`
+- [ ] Define a stable “agent event” stream schema (status, tool-call, tool-result, thoughts/plan redacted, errors)
+- [ ] Add deterministic “tool budget” and “step limit” controls (max tool calls, max iterations, max tokens)
+
+### Memory Management (Short-Term, Long-Term, and Summaries)
+- [ ] Add a memory store abstraction:
+  - [ ] In-memory store (baseline)
+  - [ ] Local persistent store (SQLite or file-based JSONL)
+  - [ ] Configurable storage location (per-workspace + global)
+- [ ] Implement “conversation summarization” checkpoints:
+  - [ ] Summarize every N turns or when token budget tight
+  - [ ] Keep raw turns for a short window, summaries for long window
+- [ ] Add memory controls to API:
+  - [ ] `POST /v1/memory/append` (store a fact)
+  - [ ] `POST /v1/memory/query` (retrieve relevant facts)
+  - [ ] `POST /v1/memory/forget` (delete entries by id/query)
+  - [ ] `GET /v1/memory/stats`
+- [ ] Add privacy controls:
+  - [ ] Allowlist/denylist paths for ingestion
+  - [ ] Secret scanning/redaction before storing memory
+  - [ ] Per-tool permission prompts (optional)
+
+### Local RAG (Repo-Aware Retrieval) to Power Agents
+- [ ] Build a local index pipeline:
+  - [ ] Workspace file chunking strategy
+  - [ ] Metadata capture (path, git blame, last modified)
+  - [ ] Incremental updates via file watchers
+- [ ] Add retrieval endpoints/tools:
+  - [ ] `POST /v1/retrieval/index` (build/refresh index)
+  - [ ] `POST /v1/retrieval/query` (semantic + keyword hybrid)
+  - [ ] `GET /v1/retrieval/status`
+- [ ] Decide embeddings strategy:
+  - [ ] Use embeddings endpoint if/when available
+  - [ ] Fallback to local embeddings model (opt-in) OR lexical search only
+- [ ] Add “grounding packets” to agent prompts (citations as file paths + ranges)
+- [ ] Add safeguards: max retrieved tokens, dedupe, source ranking, ignore binary/large files
+
+### Media: Images, Video, Desktop Sharing
+- [ ] Improve image handling beyond “text note” conversion:
+  - [ ] Accept `image_url` + base64 images reliably
+  - [ ] Route images to `LanguageModelDataPart.image(...)` when supported
+  - [ ] Capability-gate vision requests per model
+- [ ] Add experimental “desktop snapshot” tool:
+  - [ ] Capture screenshot on demand (with user confirmation)
+  - [ ] Attach as image input part to the model
+  - [ ] Redact sensitive regions (optional, later)
+- [ ] Add video support as a staged pipeline:
+  - [ ] Accept short clips or frame sampling
+  - [ ] Convert to frames + audio track
+  - [ ] Feed frames to vision model + transcript to text model
+
+### Audio: Voice Input + Transcription (Copilot-style)
+- [ ] Add an audio ingestion endpoint:
+  - [ ] `POST /v1/audio/transcriptions` (OpenAI-style)
+  - [ ] Support common formats (wav/m4a/mp3)
+- [ ] Implement transcription backend options:
+  - [ ] Use a Copilot/VS Code-provided transcription capability if available
+  - [ ] Otherwise: local transcription engine (opt-in) with clear docs
+- [ ] Add a “voice chat” helper mode for CLI:
+  - [ ] Push-to-talk capture → transcribe → send to `/v1/chat/completions`
+  - [ ] Stream assistant response back to terminal
+- [ ] Add optional text-to-speech (TTS) endpoint/hook (opt-in)
+
+### CLI/Python: First-Class Agent Workflows
+- [ ] Extend `qchat.py` to support agent runs:
+  - [ ] Start run, stream events, cancel run
+  - [ ] Optional `--session` to reuse memory
+- [ ] Add CLI commands for retrieval and memory:
+  - [ ] `qchat index` / `qchat search` / `qchat remember` / `qchat forget`
+- [ ] Add “scriptable mode” for CI-like automation:
+  - [ ] JSON in/out (no interactive UI)
+  - [ ] Exit codes based on agent success/failure
+
+### API Extensions (Keeping Compatibility)
+- [ ] Keep OpenAI-compatible endpoints stable; add new capabilities under `/v1/agents/*`, `/v1/memory/*`, `/v1/retrieval/*`, `/v1/audio/*`
+- [ ] Add versioning for the extended APIs (`/v1beta/...` or response header)
+- [ ] Add capability discovery so clients can detect supported features without trial-and-error
+
+---
+
 ## 🔮 Long-Term Vision
 
 ### Embeddings Support
@@ -166,7 +296,7 @@
 - [ ] Persist instance configuration across VS Code restarts
 
 ### CLI Tool
-- [ ] Create standalone CLI for starting gateway without VS Code
+- [ ] (Re-evaluate) Create standalone CLI for starting gateway without VS Code
 - [ ] Package as npx-runnable tool
 - [ ] Support same configuration options as extension
 - [ ] Useful for CI/CD pipelines
@@ -175,10 +305,9 @@
 ### Advanced Features
 - [ ] Streaming SSE improvements (better buffering, reconnection)
 - [ ] Conversation history/context management
-- [ ] Token usage tracking and reporting
-- [ ] Cost estimation per request
+- [ ] (Gateway-only) Request/token estimates and reporting (based on `countTokens`, not Copilot quotas)
 - [ ] Request/response caching layer
-- [ ] Metrics dashboard (requests, tokens, errors)
+- [ ] (Gateway-only) Minimal metrics view (requests, errors, durations)
 - [ ] WebSocket support for bidirectional communication
 
 ---

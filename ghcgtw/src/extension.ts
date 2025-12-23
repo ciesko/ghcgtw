@@ -27,6 +27,23 @@ export function deactivate() {
     stopServer();
 }
 
+async function requestModelAccess(): Promise<vscode.LanguageModelChat[]> {
+    try {
+        return await vscode.lm.selectChatModels();
+    } catch (err) {
+        if (err instanceof vscode.LanguageModelError && err.code === 'NoPermissions') {
+            const choice = await vscode.window.showWarningMessage(
+                'GitHub Copilot Gateway needs access to language models to function.',
+                'Grant Access'
+            );
+            if (choice === 'Grant Access') {
+                return await vscode.lm.selectChatModels();
+            }
+        }
+        throw err;
+    }
+}
+
 function startServer() {
     if (server) {
         vscode.window.showInformationMessage('AI Gateway is already running');
@@ -157,7 +174,7 @@ async function showInfo() {
         return;
     }
 
-    const models = await vscode.lm.selectChatModels();
+    const models = await requestModelAccess();
     const uptime = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
     const uptimeStr = uptime < 60 ? `${uptime}s` : `${Math.floor(uptime / 60)}m ${uptime % 60}s`;
 
@@ -192,7 +209,7 @@ function updateStatusBar() {
 
 async function handleModels(req: http.IncomingMessage, res: http.ServerResponse) {
     try {
-        const models = await vscode.lm.selectChatModels();
+        const models = await requestModelAccess();
         
         const modelList = models.map(model => ({
             id: model.id,
@@ -222,7 +239,7 @@ async function handleTokenCount(req: http.IncomingMessage, res: http.ServerRespo
         // Select model (same logic as chat completion)
         let selectedModel: vscode.LanguageModelChat | undefined;
         if (model) {
-            const models = await vscode.lm.selectChatModels();
+            const models = await requestModelAccess();
             selectedModel = models.find(m => m.id === model || m.family === model);
             if (!selectedModel) {
                 const familyModels = await vscode.lm.selectChatModels({ family: model });
@@ -230,7 +247,7 @@ async function handleTokenCount(req: http.IncomingMessage, res: http.ServerRespo
             }
         } else {
             const miniModels = await vscode.lm.selectChatModels({ family: 'gpt-4o-mini' });
-            selectedModel = miniModels.length > 0 ? miniModels[0] : (await vscode.lm.selectChatModels({ vendor: 'copilot' }))[0];
+            selectedModel = miniModels.length > 0 ? miniModels[0] : (await requestModelAccess())[0];
         }
 
         if (!selectedModel) {
@@ -283,7 +300,7 @@ async function handleChatCompletion(req: http.IncomingMessage, res: http.ServerR
         
         if (model) {
             // Try to find specific model by ID or family
-            const models = await vscode.lm.selectChatModels();
+            const models = await requestModelAccess();
             selectedModel = models.find(m => m.id === model || m.family === model);
             
             if (!selectedModel) {
@@ -298,7 +315,7 @@ async function handleChatCompletion(req: http.IncomingMessage, res: http.ServerR
                 selectedModel = miniModels[0];
             } else {
                 // Fallback: any Copilot model
-                const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+                const models = await requestModelAccess();
                 selectedModel = models[0];
             }
         }
