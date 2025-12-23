@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as http from 'http';
 
 const PORT = 3000;
+const GATEWAY_ID = 'github-copilot-gateway';
 let server: http.Server | undefined;
 let statusBarItem: vscode.StatusBarItem;
 let requestCount = 0;
@@ -54,7 +55,7 @@ function startServer() {
             await handleTokenCount(req, res);
         } else if (req.url === '/health' && req.method === 'GET') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ status: 'ok', port: PORT }));
+            res.end(JSON.stringify({ status: 'ok', port: PORT, app: GATEWAY_ID }));
         } else {
             res.writeHead(404, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Not found' }));
@@ -70,16 +71,56 @@ function startServer() {
         vscode.window.showInformationMessage(`AI Gateway started on http://localhost:${PORT}`);
     });
 
-    server.on('error', (err: any) => {
+    server.on('error', async (err: any) => {
         if (err.code === 'EADDRINUSE') {
-            statusBarItem.text = `$(warning) AI Gateway (port ${PORT} in use)`;
-            statusBarItem.tooltip = `Port ${PORT} is already in use. Another VS Code instance may be running the gateway. Click for options.`;
-            statusBarItem.show();
-            // Don't show popup - just update status bar
+            const isGateway = await checkExistingGateway();
+            if (isGateway) {
+                statusBarItem.text = `$(check) AI Gateway :${PORT}`;
+                statusBarItem.tooltip = 'Connected to existing AI Gateway on this port';
+                statusBarItem.show();
+            } else {
+                statusBarItem.text = `$(warning) AI Gateway (port ${PORT} in use)`;
+                statusBarItem.tooltip = `Port ${PORT} is already in use. Another service may be running. Click for options.`;
+                statusBarItem.show();
+            }
         } else {
             vscode.window.showErrorMessage(`Server error: ${err.message}`);
         }
         server = undefined;
+    });
+}
+
+async function checkExistingGateway(): Promise<boolean> {
+    return new Promise((resolve) => {
+        const req = http.get({
+            hostname: 'localhost',
+            port: PORT,
+            path: '/health',
+            timeout: 1000
+        }, (res) => {
+            if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
+                resolve(false);
+                return;
+            }
+
+            let body = '';
+            res.on('data', chunk => body += chunk.toString());
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(body || '{}');
+                    resolve(parsed.status === 'ok' && parsed.app === GATEWAY_ID);
+                } catch (err) {
+                    console.error('Health check parse error:', err);
+                    resolve(false);
+                }
+            });
+        });
+
+        req.on('error', () => resolve(false));
+        req.on('timeout', () => {
+            req.destroy();
+            resolve(false);
+        });
     });
 }
 
@@ -97,6 +138,15 @@ function stopServer() {
 
 async function showInfo() {
     if (!server) {
+        const connected = await checkExistingGateway();
+        if (connected) {
+            statusBarItem.text = `$(check) AI Gateway :${PORT}`;
+            statusBarItem.tooltip = 'Connected to existing AI Gateway on this port';
+            statusBarItem.show();
+            vscode.window.showInformationMessage(`AI Gateway is already running on port ${PORT}. This window is connected to the existing instance.`);
+            return;
+        }
+
         const choice = await vscode.window.showInformationMessage(
             'AI Gateway is not running',
             'Start Server'
