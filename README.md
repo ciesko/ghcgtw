@@ -40,13 +40,18 @@ Click the status bar → "Copy API Key" → Paste into your environment:
 export GHCGTW_API_KEY='your-api-key-here'
 ```
 
-**4. Use It**
+**4. Try It**
 ```bash
-pip install -r requirements.txt
-python qchat.py "Explain async/await in Python"
-```
+# Quick test with curl (replace YOUR-API-KEY)
+curl http://localhost:3000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR-API-KEY" \
+  -d '{"model": "gpt-5-mini", "messages": [{"role": "user", "content": "Hi!"}]}'
 
-Done! Any app can now call `http://localhost:3000/v1/chat/completions`
+# Or use the Python CLI
+pip install -r requirements.txt
+./qchat.py "Explain async/await in Python"
+```
 
 ## Security
 
