@@ -33,13 +33,44 @@
     "commands": [
       {
         "command": "github-copilot-gateway.start",
-        "title": "Start AI Gateway Server"
+        "title": "Start AI Gateway Server",
+        "category": "AI Gateway"
       },
       {
         "command": "github-copilot-gateway.stop",
-        "title": "Stop AI Gateway Server"
+        "title": "Stop AI Gateway Server",
+        "category": "AI Gateway"
+      },
+      {
+        "command": "github-copilot-gateway.selectModel",
+        "title": "Select AI Model",
+        "category": "AI Gateway",
+        "icon": "$(hubot)"
+      },
+      {
+        "command": "github-copilot-gateway.openDashboard",
+        "title": "Open Dashboard",
+        "category": "AI Gateway",
+        "icon": "$(dashboard)"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "GitHub Copilot AI Gateway",
+      "properties": {
+        "github-copilot-gateway.port": {
+          "type": "number",
+          "default": 3000,
+          "description": "Port number for the AI Gateway server",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "github-copilot-gateway.defaultModel": {
+          "type": "string",
+          "default": "gpt-5-mini",
+          "description": "Default model family to use when no model is specified (e.g., gpt-5-mini, gpt-4o, claude-sonnet)"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

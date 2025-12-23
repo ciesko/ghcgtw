@@ -1,9 +1,19 @@
 import * as vscode from 'vscode';
 import * as http from 'http';
 import * as crypto from 'crypto';
+import { createOrShowWebview, updateWebview } from './webview';
 
-const PORT = 3000;
 const GATEWAY_ID = 'github-copilot-gateway';
+
+function getPort(): number {
+    const config = vscode.workspace.getConfiguration('github-copilot-gateway');
+    return config.get<number>('port', 3000);
+}
+
+function getDefaultModel(): string {
+    const config = vscode.workspace.getConfiguration('github-copilot-gateway');
+    return config.get<string>('defaultModel', 'gpt-5-mini');
+}
 let server: http.Server | undefined;
 let statusBarItem: vscode.StatusBarItem;
 let requestCount = 0;
@@ -26,7 +36,9 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('github-copilot-gateway.start', () => startServer()),
         vscode.commands.registerCommand('github-copilot-gateway.stop', () => stopServer()),
         vscode.commands.registerCommand('github-copilot-gateway.showInfo', () => showInfo()),
-        vscode.commands.registerCommand('github-copilot-gateway.regenerateApiKey', () => regenerateApiKey(context))
+        vscode.commands.registerCommand('github-copilot-gateway.regenerateApiKey', () => regenerateApiKey(context)),
+        vscode.commands.registerCommand('github-copilot-gateway.selectModel', () => selectModel()),
+        vscode.commands.registerCommand('github-copilot-gateway.openDashboard', () => openDashboard(context))
     );
 
     // Auto-failover: try to start server when window gains focus
@@ -43,6 +55,31 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Auto-start server on activation
     startServer();
+}
+
+async function openDashboard(context: vscode.ExtensionContext) {
+    try {
+        const models = await requestModelAccess();
+        const uptime = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+        const modelData = models.map(m => ({
+            id: m.id,
+            family: m.family,
+            vendor: m.vendor
+        }));
+
+        createOrShowWebview(
+            context,
+            !!server,
+            getPort(),
+            getDefaultModel(),
+            apiKey || '',
+            uptime,
+            requestCount,
+            modelData
+        );
+    } catch (error) {
+        vscode.window.showErrorMessage(`Failed to open dashboard: ${error}`);
+    }
 }
 
 export function deactivate() {
@@ -113,32 +150,35 @@ function startServer() {
             await handleTokenCount(req, res);
         } else if (req.url === '/health' && req.method === 'GET') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ status: 'ok', port: PORT, app: GATEWAY_ID }));
+            res.end(JSON.stringify({ status: 'ok', port: getPort(), app: GATEWAY_ID }));
         } else {
             res.writeHead(404, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Not found' }));
         }
     });
 
-    server.listen(PORT, '127.0.0.1', () => {
+    const port = getPort();
+    server.listen(port, '127.0.0.1', () => {
         startTime = Date.now();
         requestCount = 0;
-        statusBarItem.text = `$(circle-filled) AI Gateway :${PORT} (hosting)`;
-        statusBarItem.tooltip = 'This window is hosting the AI Gateway server (click for details)';
+        const model = getDefaultModel();
+        statusBarItem.text = `$(circle-filled) AI Gateway :${port} [${model}]`;
+        statusBarItem.tooltip = 'AI Gateway Server (click for details | right-click to change model)';
         statusBarItem.show();
-        vscode.window.showInformationMessage(`AI Gateway started on http://localhost:${PORT}`);
+        vscode.window.showInformationMessage(`AI Gateway started on http://localhost:${port}`);
     });
 
     server.on('error', async (err: any) => {
         if (err.code === 'EADDRINUSE') {
+            const port = getPort();
             const isGateway = await checkExistingGateway();
             if (isGateway) {
-                statusBarItem.text = `$(circle-outline) AI Gateway :${PORT}`;
+                statusBarItem.text = `$(circle-outline) AI Gateway :${port}`;
                 statusBarItem.tooltip = 'Gateway is hosted by another VS Code window';
                 statusBarItem.show();
             } else {
-                statusBarItem.text = `$(warning) AI Gateway (port ${PORT} in use)`;
-                statusBarItem.tooltip = `Port ${PORT} is already in use. Another service may be running. Click for options.`;
+                statusBarItem.text = `$(warning) AI Gateway (port ${port} in use)`;
+                statusBarItem.tooltip = `Port ${port} is already in use. Another service may be running. Click for options.`;
                 statusBarItem.show();
             }
         } else {
@@ -150,9 +190,10 @@ function startServer() {
 
 async function checkExistingGateway(): Promise<boolean> {
     return new Promise((resolve) => {
+        const port = getPort();
         const req = http.get({
             hostname: 'localhost',
-            port: PORT,
+            port: port,
             path: '/health',
             timeout: 1000
         }, (res) => {
@@ -198,7 +239,8 @@ async function showInfo() {
     if (!server) {
         const connected = await checkExistingGateway();
         if (connected) {
-            statusBarItem.text = `$(circle-outline) AI Gateway :${PORT}`;
+            const port = getPort();
+            statusBarItem.text = `$(circle-outline) AI Gateway :${port}`;
             statusBarItem.tooltip = 'Gateway is hosted by another VS Code window';
             statusBarItem.show();
             vscode.window.showInformationMessage(`Gateway is hosted by another VS Code window.`);
@@ -218,11 +260,12 @@ async function showInfo() {
     const models = await requestModelAccess();
     const uptime = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
     const uptimeStr = uptime < 60 ? `${uptime}s` : `${Math.floor(uptime / 60)}m ${uptime % 60}s`;
+    const port = getPort();
 
     const info = [
         `**AI Gateway Status**`,
         ``,
-        `🟢 Server: Running on port ${PORT}`,
+        `🟢 Server: Running on port ${port}`,
         `⏱️  Uptime: ${uptimeStr}`,
         `📊 Requests: ${requestCount}`,
         `🤖 Models: ${models.length} available`,
@@ -230,7 +273,7 @@ async function showInfo() {
         `**Available Models:**`,
         ...models.map(m => `  • ${m.id} (${m.family})`),
         ``,
-        `**Endpoint:** http://localhost:${PORT}`
+        `**Endpoint:** http://localhost:${port}`
     ].join('\n');
 
     const choice = await vscode.window.showInformationMessage(info, { modal: true }, 'Copy API Key', 'Regenerate Key');
@@ -252,18 +295,85 @@ async function regenerateApiKey(context: vscode.ExtensionContext) {
         apiKey = crypto.randomUUID();
         await context.secrets.store('ghcgtw.apiKey', apiKey);
         vscode.window.showInformationMessage('New API key generated. Click status bar to copy.');
+        
+        // Update webview if open
+        try {
+            const models = await requestModelAccess();
+            const uptime = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+            const modelData = models.map(m => ({ id: m.id, family: m.family, vendor: m.vendor }));
+            updateWebview(!!server, getPort(), getDefaultModel(), apiKey, uptime, requestCount, modelData);
+        } catch (e) {
+            // Ignore if webview not open
+        }
     }
 }
 
 function updateStatusBar() {
     if (server) {
-        statusBarItem.text = `$(check) AI Gateway :${PORT}`;
-        statusBarItem.tooltip = 'GitHub Copilot AI Gateway is running (click for details)';
+        const port = getPort();
+        const model = getDefaultModel();
+        statusBarItem.text = `$(check) AI Gateway :${port} [${model}]`;
+        statusBarItem.tooltip = 'GitHub Copilot AI Gateway is running (click for details | right-click to change model)';
         statusBarItem.show();
     } else {
         statusBarItem.text = `$(x) AI Gateway`;
         statusBarItem.tooltip = 'AI Gateway is stopped (click to start)';
         statusBarItem.show();
+    }
+}
+
+async function selectModel() {
+    try {
+        const models = await requestModelAccess();
+        
+        if (models.length === 0) {
+            vscode.window.showWarningMessage('No models available. Make sure GitHub Copilot is active.');
+            return;
+        }
+
+        // Create a map of unique model families
+        const familyMap = new Map<string, vscode.LanguageModelChat>();
+        models.forEach(model => {
+            if (!familyMap.has(model.family)) {
+                familyMap.set(model.family, model);
+            }
+        });
+
+        const currentModel = getDefaultModel();
+        const items = Array.from(familyMap.entries()).map(([family, model]) => ({
+            label: family === currentModel ? `$(check) ${family}` : family,
+            description: `${model.vendor} - ${model.name}`,
+            detail: family === currentModel ? 'Currently selected' : '',
+            family: family
+        }));
+
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select default AI model',
+            title: 'AI Gateway - Model Selection'
+        });
+
+        if (selected) {
+            const config = vscode.workspace.getConfiguration('github-copilot-gateway');
+            await config.update('defaultModel', selected.family, vscode.ConfigurationTarget.Global);
+            
+            updateStatusBar();
+            vscode.window.showInformationMessage(`Default model changed to: ${selected.family}`);
+            
+            // If server is running, suggest restart
+            if (server) {
+                const choice = await vscode.window.showInformationMessage(
+                    'Model changed. Restart server to apply?',
+                    'Restart Now',
+                    'Later'
+                );
+                if (choice === 'Restart Now') {
+                    stopServer();
+                    setTimeout(() => startServer(), 500);
+                }
+            }
+        }
+    } catch (error) {
+        vscode.window.showErrorMessage(`Failed to select model: ${error}`);
     }
 }
 
@@ -306,8 +416,9 @@ async function handleTokenCount(req: http.IncomingMessage, res: http.ServerRespo
                 selectedModel = familyModels[0];
             }
         } else {
-            const miniModels = await vscode.lm.selectChatModels({ family: 'gpt-5-mini' });
-            selectedModel = miniModels.length > 0 ? miniModels[0] : (await requestModelAccess())[0];
+            const defaultFamily = getDefaultModel();
+            const defaultModels = await vscode.lm.selectChatModels({ family: defaultFamily });
+            selectedModel = defaultModels.length > 0 ? defaultModels[0] : (await requestModelAccess())[0];
         }
 
         if (!selectedModel) {
@@ -369,10 +480,11 @@ async function handleChatCompletion(req: http.IncomingMessage, res: http.ServerR
                 selectedModel = familyModels[0];
             }
         } else {
-            // Default: use gpt-5-mini
-            const miniModels = await vscode.lm.selectChatModels({ family: 'gpt-5-mini' });
-            if (miniModels.length > 0) {
-                selectedModel = miniModels[0];
+            // Default: use configured default model
+            const defaultFamily = getDefaultModel();
+            const defaultModels = await vscode.lm.selectChatModels({ family: defaultFamily });
+            if (defaultModels.length > 0) {
+                selectedModel = defaultModels[0];
             } else {
                 // Fallback: any Copilot model
                 const models = await requestModelAccess();
