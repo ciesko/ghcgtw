@@ -1,0 +1,30 @@
+# Build output
+ghcgtw/out
+dist
+*.vsix
+
+# Dependencies
+ghcgtw/node_modules
+
+# VS Code test
+.vscode-test
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.Python
+venv
+.venv
+env
+
+# SignalX analytics
+.signalx/
