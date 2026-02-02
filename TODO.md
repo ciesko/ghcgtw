@@ -1,5 +1,21 @@
 ## GHCGTW TODO
 
+### High Priority
+
+#### API Design & Versioning
+- [ ] Clarify endpoint structure for OpenAI vs Anthropic APIs:
+  - [ ] Consider `/openai/v1/...` and `/anthropic/v1/...` prefixes instead of shared `/v1/...`
+  - [ ] Document which endpoints belong to which API style
+  - [ ] Ensure streaming vs non-streaming behavior is clear for each API format
+- [ ] Update README with clear API usage examples for both OpenAI and Anthropic clients
+
+#### Documentation & Promotion
+- [ ] Add screenshots to the README
+- [ ] Add a "Share on X" button
+- [ ] Add Marketplace assets (icon + short description) consistent with local experimentation positioning
+
+---
+
 ### Reliability & Observability
 - [ ] Add VS Code Output Channel (`AI Gateway`) with structured request logs (method, path, request id, model, duration, status)
 - [ ] Normalize error responses:
@@ -23,12 +39,10 @@
 - [ ] Add `CONTRIBUTING.md` (build, debug, release steps)
 - [ ] Add `SECURITY.md` (local-only assumptions, key handling, threat model)
 - [ ] Add a small "smoke test" script (curl-based) to validate endpoints quickly
-- [ ] Add Marketplace assets (icon + short description) consistent with local experimentation positioning
 
 ### Stability & Testing
 - [ ] Cross-platform verification notes (macOS/Windows/Linux)
 - [ ] Minimal integration tests for HTTP endpoints (best-effort; keep lightweight)
 
-### Documentation & Promotion
-- [ ] Add screenshots to the README
-- [ ] Add a "Share on X" button
+### Future Exploration
+- [ ] TBD: Expose local models (Ollama, llama.cpp, etc.) through the same interface for a unified API?
